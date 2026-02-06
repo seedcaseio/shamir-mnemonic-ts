@@ -43,7 +43,7 @@ npm run test:vectors
 The master secret must have an **even length in bytes** (e.g. 16, 20, 24, 28, or 32). This is required because passphrase encryption uses a **Feistel cipher** that splits the secret into two equal halves (L and R); an odd length cannot be divided evenly.
 
 - **Hex**: Use a hex string with an **even number of characters** (2 hex digits = 1 byte). Example: `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 chars = 16 bytes).
-- **BIP39**: The entropy of a BIP39 seed (128–256 bits) always has an even byte length (16, 20, 24, 28, 32), so it is suitable as a master secret.
+- **BIP39**: BIP39 seed (128–256 bits) always has an even byte length (16, 20, 24, 28, 32), so it is suitable as a master secret.
 
 ### Basic: split and recover
 
