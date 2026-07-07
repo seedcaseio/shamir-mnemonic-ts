@@ -29,13 +29,6 @@ See [SLIP-0039](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) f
 npm install shamir-mnemonic-ts
 ```
 
-## Testing
-
-```bash
-npm test
-npm run test:vectors
-```
-
 ## Usage
 
 ### Master secret
@@ -147,9 +140,17 @@ try {
 }
 ```
 
-## Compatibility
+### Entry point: `shamir-mnemonic-ts/decode`
 
-This implementation is binary-compatible with the SLIP-0039 standard and produces/consumes the standard mnemonic format.
+For React Native / Expo and other environments without Node `crypto`, use `./decode` to parse share mnemonics without loading `cipher` or `shamir`:
+
+```typescript
+import { Share, MnemonicError } from 'shamir-mnemonic-ts/decode';
+
+const share = Share.fromMnemonic(mnemonic);
+```
+
+Exposes `Share`, `ShareCommonParameters`, `ShareGroupParameters`, and `MnemonicError` only. Split, combine, encryption, and recovery stay on the main entry point (`import * as shamir from 'shamir-mnemonic-ts'`).
 
 ## Security
 
