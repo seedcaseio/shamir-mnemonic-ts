@@ -1,6 +1,6 @@
 {
   "name": "shamir-mnemonic-ts",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "TypeScript implementation of SLIP-0039 Shamir Secret Sharing for mnemonic seed phrases",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,6 +12,10 @@
     "./decode": {
       "types": "./dist/decode.d.ts",
       "default": "./dist/decode.js"
+    },
+    "./wordlist": {
+      "types": "./dist/wordlist.d.ts",
+      "default": "./dist/wordlist.js"
     }
   },
   "files": [

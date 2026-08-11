@@ -152,6 +152,23 @@ const share = Share.fromMnemonic(mnemonic);
 
 Exposes `Share`, `ShareCommonParameters`, `ShareGroupParameters`, and `MnemonicError` only. Split, combine, encryption, and recovery stay on the main entry point (`import * as shamir from 'shamir-mnemonic-ts'`).
 
+### Entry point: `shamir-mnemonic-ts/wordlist`
+
+The SLIP-0039 wordlist and word↔index helpers, without loading split/combine or cipher:
+
+```typescript
+import {
+  WORDLIST,
+  WORD_INDEX,
+  RADIX_BITS,
+  mnemonicToIndices,
+  mnemonicFromIndices,
+  wordsFromIndices,
+} from 'shamir-mnemonic-ts/wordlist';
+```
+
+`WORDLIST` is the official 1024-word list; each word is one `RADIX_BITS`-bit symbol. `WORD_INDEX` maps lowercase words to indices. Use this entry as the single source of truth when packing or validating share mnemonics outside the main API.
+
 ## Security
 
 ### Handling sensitive data

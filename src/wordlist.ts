@@ -1,8 +1,10 @@
-import { RADIX } from './constants';
+import { RADIX, RADIX_BITS } from './constants';
 import { MnemonicError } from './utils';
 
+export { RADIX_BITS };
+
 // Wordlist from SLIP-0039
-const WORDLIST: readonly string[] = [
+export const WORDLIST: readonly string[] = [
   'academic',
   'acid',
   'acne',
@@ -1041,6 +1043,9 @@ const WORD_INDEX_MAP = new Map<string, number>();
 WORDLIST.forEach((word, index) => {
   WORD_INDEX_MAP.set(word, index);
 });
+
+/** Lowercase word → index. Same map used by `mnemonicToIndices`. */
+export const WORD_INDEX: ReadonlyMap<string, number> = WORD_INDEX_MAP;
 
 export function* wordsFromIndices(indices: Iterable<number>): Generator<string> {
   for (const i of indices) {
