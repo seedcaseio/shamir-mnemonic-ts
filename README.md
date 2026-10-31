@@ -11,7 +11,7 @@ This is a complete conversion of the Python [python-shamir-mnemonic](https://git
 - **SLIP-0039 compliant**: binary-compatible with the standard mnemonic format
 - **Group sharing**: split a secret across multiple groups (e.g. 2-of-3 groups, each with its own member threshold)
 - **Passphrase protection**: optional encryption of the master secret (printable ASCII only)
-- **Extendable backups**: shares created with the `extendable` flag (default) can later be extended with new shares for the same secret
+- **Extendable backups**: with the `extendable` flag (default), new shares can later be created for the same secret, by recovering the encrypted master secret (`recoverEms`) and splitting it again (`splitEms`)
 - **Iteration exponent**: strengthens passphrase derivation (integer from 0 to 15, default 1)
 - **Low-level API**: `splitEms` / `recoverEms` for working with encrypted master secrets, plus `encrypt` / `decrypt` and `decodeMnemonics`
 - **Interactive recovery**: `RecoveryState` for step-by-step mnemonic entry and progress tracking
@@ -109,12 +109,13 @@ import * as shamir from 'shamir-mnemonic-ts';
 
 const state = new shamir.RecoveryState();
 
-// Add mnemonics one by one (e.g. from user input). Entering the same share twice
-// is harmless; a share from another backup throws (NOT_IN_CURRENT_SET or CONFLICTING_SHARE).
+// Add mnemonics one by one (e.g. from user input). Entering the same share twice is
+// harmless; a share from another backup throws (NOT_IN_CURRENT_SET, PARAMETERS_MISMATCH
+// or CONFLICTING_SHARE).
 state.addShare(shamir.Share.fromMnemonic(firstMnemonic));
 state.addShare(shamir.Share.fromMnemonic(secondMnemonic));
 
-state.groupStatus(0);   // [entered, threshold] for group 0
+state.groupStatus(0);   // [entered, threshold] for group 0 ([0, UNDETERMINED] before any share)
 state.groupPrefix(0);   // first words of group 0
 state.isComplete();     // true when enough shares to recover
 
@@ -174,7 +175,7 @@ import {
 
 ## Errors
 
-Every error thrown on purpose is a `ShamirError` with a stable `code` and a `details` object. Invalid mnemonics or sets of mnemonics throw `MnemonicError`, a subclass of `ShamirError`. Show your own (translated) messages from `code` and `details`; do not parse `message`, its wording may change.
+Every error thrown on purpose is a `ShamirError` with a stable `code` and a `details` object (except the `TypeError` thrown by the `WORD_INDEX` mutators; arguments of the wrong type, such as a non-iterable, can also throw native errors). Invalid mnemonics or sets of mnemonics throw `MnemonicError`, a subclass of `ShamirError`. Show your own (translated) messages from `code` and `details`; do not parse `message`, its wording may change.
 
 ```typescript
 import * as shamir from 'shamir-mnemonic-ts';
@@ -200,10 +201,10 @@ Invalid mnemonics or sets of mnemonics (`MnemonicError`):
 | `INVALID_CHECKSUM` | The checksum fails: typo, missing or swapped words | |
 | `INVALID_PADDING` | Invalid padding bits in the share value | |
 | `GROUP_THRESHOLD_EXCEEDS_GROUP_COUNT` | The share metadata is inconsistent | |
-| `PARAMETERS_MISMATCH` | Shares of the same group disagree on a parameter | `field` |
-| `MIXED_MNEMONIC_SETS` | Shares from different backups, or with different group settings | `wordCount` |
+| `PARAMETERS_MISMATCH` | Shares of the same group disagree on a parameter. Shares from two different backups usually end up here (`field: 'identifier'`) | `field` |
+| `MIXED_MNEMONIC_SETS` | Shares in different groups disagree on the identifier, iteration exponent, group threshold or group count (another backup) | `wordCount` |
 | `CONFLICTING_SHARE` | A share has the same index as another one but a different value | `index` |
-| `DUPLICATE_SHARE_INDEX` | Two shares with the same index reach recovery | |
+| `DUPLICATE_SHARE_INDEX` | Internal consistency check (two shares with the same index reach interpolation); normally reported earlier as `CONFLICTING_SHARE` | |
 | `SHARE_LENGTH_MISMATCH` | Shares have different lengths | |
 | `INVALID_DIGEST` | The recovered secret fails its integrity check: corrupted or mismatched shares | |
 | `EMPTY_MNEMONICS` | No mnemonic was given | |
@@ -244,7 +245,7 @@ The following APIs return a `Buffer` containing the master secret:
 - `EncryptedMasterSecret.decrypt`
 - `RecoveryState.recover`
 
-**Callers must overwrite this buffer after use** (e.g. `buffer.fill(0)`) to limit exposure in memory. Do this in a `try/finally` block so cleanup runs even when an error is thrown. The usage examples in the [Usage](#usage) section are simplified; production code should apply this cleanup. See the [Secure cleanup](#secure-cleanup) example.
+**Callers must overwrite this buffer after use** (e.g. `buffer.fill(0)`) to limit exposure in memory. Wiping is best effort: the JavaScript engine may keep copies, and strings cannot be wiped at all. Do this in a `try/finally` block so cleanup runs even when an error is thrown. The usage examples in the [Usage](#usage) section are simplified; production code should apply this cleanup. See the [Secure cleanup](#secure-cleanup) example.
 
 Error messages never include the secret part of a share. An unknown word is reported by its position (`Invalid mnemonic word at position 5.`), never echoed. Checksum, padding and grouping errors quote the first 3 or 4 words of a mnemonic: these words only encode metadata (identifier, thresholds, indices), not the secret, but they do tell which backup a share belongs to.
 
@@ -253,7 +254,7 @@ Error messages never include the secret part of a share. An unknown word is repo
 - reading a field directly (for example `share.value`) still gives the real data;
 - `structuredClone`, Electron IPC and `postMessage`, object spread (`{ ...share }`), `Object.assign` and browser DevTools copy or show the real bytes.
 
-Never send these objects over IPC or to another process: pass mnemonic strings and wipe them as soon as possible.
+Never send these objects over IPC or to another process: pass mnemonic strings and drop references to them as soon as possible (JavaScript strings cannot be wiped).
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 

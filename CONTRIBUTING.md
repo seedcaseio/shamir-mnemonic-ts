@@ -64,7 +64,7 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 - `src/` - Source TypeScript files
   - `constants.ts` - SLIP-0039 constants
   - `utils.ts` - Utility functions, error classes and error codes
-  - `wordlist.ts` - Wordlist management
+  - `wordlist.ts` - SLIP-0039 wordlist and word/index helpers (`shamir-mnemonic-ts/wordlist`)
   - `rs1024.ts` - RS1024 checksum implementation
   - `cipher.ts` - Feistel cipher for encryption/decryption
   - `share.ts` - Share encoding/decoding

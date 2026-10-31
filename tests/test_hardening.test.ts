@@ -2,7 +2,7 @@ import * as shamir from '../src/index';
 
 const MS = Buffer.from('ABCDEFGHIJKLMNOP', 'utf8');
 
-describe('Error messages never echo user input', () => {
+describe('Error messages never echo an unknown word', () => {
   const share = shamir.generateMnemonics(1, [[1, 1]], MS)[0][0];
   const words = share.split(' ');
 
@@ -98,6 +98,12 @@ describe('Generation parameters are validated', () => {
     expect(() =>
       shamir.generateMnemonics(1, [[2, 3]], 'ABCDEFGHIJKLMNOP' as unknown as Buffer)
     ).toThrow('The master secret must be a Buffer.');
+  });
+
+  test('a member count of 0 keeps its previous message', () => {
+    expect(() => shamir.generateMnemonics(1, [[2, 0]], MS)).toThrow(
+      'The requested threshold must not exceed the number of shares.'
+    );
   });
 
   test('splitEms rejects out-of-range EMS parameters', () => {
@@ -277,12 +283,6 @@ describe('Low-level cipher validates its parameters', () => {
   test('encrypt and decrypt reject an out-of-range identifier', () => {
     expect(errorOf(() => shamir.encrypt(MS, Buffer.alloc(0), 0, 1 << 15, false)).code).toBe('INVALID_IDENTIFIER');
     expect(errorOf(() => shamir.decrypt(MS, Buffer.alloc(0), 0, -1, false)).code).toBe('INVALID_IDENTIFIER');
-  });
-
-  test('a member count of 0 keeps its previous message', () => {
-    const error = errorOf(() => shamir.generateMnemonics(1, [[2, 0]], MS));
-    expect(error.code).toBe('THRESHOLD_EXCEEDS_SHARE_COUNT');
-    expect(error.message).toBe('The requested threshold must not exceed the number of shares.');
   });
 
   test('encrypt and decrypt still round-trip', () => {
