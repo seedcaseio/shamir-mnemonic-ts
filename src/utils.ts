@@ -73,18 +73,18 @@ export const INSPECT_CUSTOM: unique symbol = Symbol.for('nodejs.util.inspect.cus
 /** Placeholder shown instead of secret bytes in logs and JSON. */
 export const REDACTED = '[redacted]';
 
+/** Get the number of `radixBits`-sized digits required to store a `n`-bit value. */
 function _roundBits(n: number, radixBits: number): number {
-  /** Get the number of `radixBits`-sized digits required to store a `n`-bit value. */
   return Math.ceil(n / radixBits);
 }
 
+/** Round up bit count to whole bytes. */
 export function bitsToBytes(n: number): number {
-  /** Round up bit count to whole bytes. */
   return _roundBits(n, 8);
 }
 
+/** Round up bit count to a multiple of word size. */
 export function bitsToWords(n: number): number {
-  /** Round up bit count to a multiple of word size. */
   // Import constants here to handle circular dependency
   // This will work as long as calls to bitsToWords only happen *after* RADIX_BITS are declared
   const { RADIX_BITS } = require('./constants');
@@ -96,8 +96,8 @@ export function bitsToWords(n: number): number {
   return _roundBits(n, RADIX_BITS);
 }
 
+/** Convert an integer value to indices in big endian order. */
 export function* intToIndices(value: number, length: number, radixBits: number): Generator<number> {
-  /** Convert an integer value to indices in big endian order. */
   const mask = (1 << radixBits) - 1;
   for (let i = length - 1; i >= 0; i--) {
     yield (value >> (i * radixBits)) & mask;

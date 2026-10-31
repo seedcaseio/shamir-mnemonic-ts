@@ -15,13 +15,13 @@ import { INSPECT_CUSTOM, MnemonicError, REDACTED, bitsToBytes, bitsToWords, intT
 
 export type WordIndex = number;
 
+/** Converts an integer value to a list of base 1024 indices in big endian order. */
 function _intToWordIndices(value: number, length: number): WordIndex[] {
-  /** Converts an integer value to a list of base 1024 indices in big endian order. */
   return Array.from(intToIndices(value, length, RADIX_BITS));
 }
 
+/** Converts a list of base 1024 indices in big endian order to an integer value. */
 function _intFromWordIndices(indices: Iterable<WordIndex>): number {
-  /** Converts a list of base 1024 indices in big endian order to an integer value. */
   let value = 0;
   for (const index of indices) {
     value = value * RADIX + index;
@@ -33,8 +33,8 @@ function _customizationString(extendable: boolean): Buffer {
   return extendable ? CUSTOMIZATION_STRING_EXTENDABLE : CUSTOMIZATION_STRING_ORIG;
 }
 
+/** Parameters that are common to all shares of a master secret. */
 export interface ShareCommonParameters {
-  /** Parameters that are common to all shares of a master secret. */
   identifier: number;
   extendable: boolean;
   iterationExponent: number;
@@ -42,8 +42,8 @@ export interface ShareCommonParameters {
   groupCount: number;
 }
 
+/** Parameters that are common to all shares of a master secret, which belong to the same group. */
 export interface ShareGroupParameters {
-  /** Parameters that are common to all shares of a master secret, which belong to the same group. */
   identifier: number;
   extendable: boolean;
   iterationExponent: number;
@@ -86,8 +86,8 @@ export class Share {
     this.value = value;
   }
 
+  /** Return values that uniquely identify a matching set of shares. */
   commonParameters(): ShareCommonParameters {
-    /** Return values that uniquely identify a matching set of shares. */
     return {
       identifier: this.identifier,
       extendable: this.extendable,
@@ -97,8 +97,8 @@ export class Share {
     };
   }
 
+  /** Return values that uniquely identify shares belonging to the same group. */
   groupParameters(): ShareGroupParameters {
-    /** Return values that uniquely identify shares belonging to the same group. */
     return {
       identifier: this.identifier,
       extendable: this.extendable,
@@ -132,8 +132,8 @@ export class Share {
     return _intToWordIndices(val, 2);
   }
 
+  /** Convert share data to a share mnemonic. */
   words(): string[] {
-    /** Convert share data to a share mnemonic. */
     const valueWordCount = bitsToWords(this.value.length * 8);
     // Convert Buffer to big-endian integer (using BigInt to handle large values)
     let valueInt = 0n;
@@ -155,8 +155,8 @@ export class Share {
     return Array.from(wordlist.wordsFromIndices(shareData.concat(checksum)));
   }
 
+  /** Convert share data to a share mnemonic. */
   mnemonic(): string {
-    /** Convert share data to a share mnemonic. */
     return this.words().join(' ');
   }
 
@@ -169,8 +169,8 @@ export class Share {
     return `Share ${JSON.stringify(this.toJSON())}`;
   }
 
+  /** Convert a share mnemonic to share data. */
   static fromMnemonic(mnemonic: string): Share {
-    /** Convert a share mnemonic to share data. */
     const mnemonicData = wordlist.mnemonicToIndices(mnemonic);
 
     if (mnemonicData.length < MIN_MNEMONIC_LENGTH_WORDS) {

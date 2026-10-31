@@ -43,6 +43,7 @@ function _xor(a: Buffer, b: Buffer): Buffer {
   return result;
 }
 
+/** The round function used internally by the Feistel cipher. */
 function _roundFunction(
   i: number,
   passphrase: Buffer,
@@ -50,7 +51,6 @@ function _roundFunction(
   salt: Buffer,
   r: Buffer
 ): Buffer {
-  /** The round function used internally by the Feistel cipher. */
   const iBuffer = Buffer.from([i]);
   const passphraseConcat = Buffer.concat([iBuffer, passphrase]);
   const saltConcat = Buffer.concat([salt, r]);

@@ -5,14 +5,14 @@ import { INSPECT_CUSTOM, MnemonicError, Passphrase, ShamirError } from './utils'
 
 export const UNDETERMINED = -1;
 
+/** Object for keeping track of running Shamir recovery. */
 export class RecoveryState {
-  /** Object for keeping track of running Shamir recovery. */
   private lastShare: Share | null = null;
   private groups: Map<number, ShareGroup> = new Map();
   private parameters: ShareCommonParameters | null = null;
 
+  /** Return three starting words of a given group. */
   groupPrefix(groupIndex: number): string {
-    /** Return three starting words of a given group. */
     if (!this.lastShare) {
       throw new ShamirError('Add at least one share first', 'RECOVERY_NOT_STARTED');
     }
@@ -32,12 +32,12 @@ export class RecoveryState {
     return fakeShare.words().slice(0, GROUP_PREFIX_LENGTH_WORDS).join(' ');
   }
 
+  /** Return completion status of given group.
+   *
+   * Result consists of the number of shares already entered, and the threshold
+   * for recovering the group.
+   */
   groupStatus(groupIndex: number): [number, number] {
-    /** Return completion status of given group.
-     *
-     * Result consists of the number of shares already entered, and the threshold
-     * for recovering the group.
-     */
     const group = this.groups.get(groupIndex);
     if (!group || group.isEmpty) {
       return [0, UNDETERMINED];
@@ -46,14 +46,14 @@ export class RecoveryState {
     return [group.length, group.memberThreshold()];
   }
 
+  /** Check whether a given group is already complete. */
   groupIsComplete(groupIndex: number): boolean {
-    /** Check whether a given group is already complete. */
     const group = this.groups.get(groupIndex);
     return group ? group.isComplete() : false;
   }
 
+  /** Return the number of groups that are already complete. */
   groupsComplete(): number {
-    /** Return the number of groups that are already complete. */
     if (this.parameters === null) {
       return 0;
     }
@@ -67,21 +67,21 @@ export class RecoveryState {
     return count;
   }
 
+  /** Check whether the recovery set is complete.
+   *
+   * That is, at least M groups must be complete, where M is the global threshold.
+   */
   isComplete(): boolean {
-    /** Check whether the recovery set is complete.
-     *
-     * That is, at least M groups must be complete, where M is the global threshold.
-     */
     if (this.parameters === null) {
       return false;
     }
     return this.groupsComplete() >= this.parameters.groupThreshold;
   }
 
+  /** Check whether the provided share matches the current set, i.e., has the same
+   * common parameters.
+   */
   matches(share: Share): boolean {
-    /** Check whether the provided share matches the current set, i.e., has the same
-     * common parameters.
-     */
     if (this.parameters === null) {
       return true;
     }
@@ -95,8 +95,8 @@ export class RecoveryState {
     );
   }
 
+  /** Add a share to the recovery set. */
   addShare(share: Share): boolean {
-    /** Add a share to the recovery set. */
     if (!this.matches(share)) {
       throw new MnemonicError(
         'This mnemonic is not part of the current set. Please try again.',

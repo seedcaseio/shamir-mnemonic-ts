@@ -262,13 +262,13 @@ function _precomputeExpLog(): [number[], number[]] {
 
 const [EXP_TABLE, LOG_TABLE] = _precomputeExpLog();
 
+/**
+ * Returns f(x) given the Shamir shares (x_1, f(x_1)), ... , (x_k, f(x_k)).
+ * @param shares The Shamir shares.
+ * @param x The x coordinate of the result.
+ * @return Evaluations of the polynomials in x.
+ */
 function _interpolate(shares: RawShare[], x: number): Buffer {
-  /**
-   * Returns f(x) given the Shamir shares (x_1, f(x_1)), ... , (x_k, f(x_k)).
-   * @param shares The Shamir shares.
-   * @param x The x coordinate of the result.
-   * @return Evaluations of the polynomials in x.
-   */
   const xCoordinates = new Set(shares.map(share => share.x));
 
   if (xCoordinates.size !== shares.length) {
@@ -488,25 +488,25 @@ export function decodeMnemonics(mnemonics: Iterable<string>): Map<number, ShareG
   return groups;
 }
 
+/**
+ * Split an Encrypted Master Secret into mnemonic shares.
+ *
+ * This function is a counterpart to `recoverEms`, and it is used as a subroutine in
+ * `generateMnemonics`. The input is an *already encrypted* Master Secret (EMS), so it
+ * is possible to encrypt the Master Secret in advance and perform the splitting later.
+ *
+ * @param groupThreshold The number of groups required to reconstruct the master secret.
+ * @param groups A list of (member_threshold, member_count) pairs for each group, where member_count
+ *   is the number of shares to generate for the group and member_threshold is the number of members required to
+ *   reconstruct the group secret.
+ * @param encryptedMasterSecret The encrypted master secret to split.
+ * @return List of groups of shares (`Share` objects; call `mnemonic()` to get the words).
+ */
 export function splitEms(
   groupThreshold: number,
   groups: Array<[number, number]>,
   encryptedMasterSecret: EncryptedMasterSecret
 ): Share[][] {
-  /**
-   * Split an Encrypted Master Secret into mnemonic shares.
-   *
-   * This function is a counterpart to `recoverEms`, and it is used as a subroutine in
-   * `generateMnemonics`. The input is an *already encrypted* Master Secret (EMS), so it
-   * is possible to encrypt the Master Secret in advance and perform the splitting later.
-   *
-   * @param groupThreshold The number of groups required to reconstruct the master secret.
-   * @param groups A list of (member_threshold, member_count) pairs for each group, where member_count
-   *   is the number of shares to generate for the group and member_threshold is the number of members required to
-   *   reconstruct the group secret.
-   * @param encryptedMasterSecret The encrypted master secret to split.
-   * @return List of groups of shares (`Share` objects; call `mnemonic()` to get the words).
-   */
   cipher.assertIdentifier(encryptedMasterSecret.identifier);
   cipher.assertIterationExponent(encryptedMasterSecret.iterationExponent);
 
@@ -564,8 +564,8 @@ export function splitEms(
   });
 }
 
+/** Returns a random identifier with the given bit length. */
 function _randomIdentifier(): number {
-  /** Returns a random identifier with the given bit length. */
   const identifierBytes = RANDOM_BYTES(bitsToBytes(ID_LENGTH_BITS));
   let identifier = 0;
   for (let i = 0; i < identifierBytes.length; i++) {
@@ -575,6 +575,28 @@ function _randomIdentifier(): number {
   return identifier & ((1 << ID_LENGTH_BITS) - 1);
 }
 
+/**
+ * Split a master secret into mnemonic shares using Shamir's secret sharing scheme.
+ *
+ * The supplied Master Secret is encrypted by the passphrase (empty passphrase is used
+ * if none is provided) and split into a set of mnemonic shares.
+ *
+ * This is the user-friendly method to back up a pre-existing secret with the Shamir
+ * scheme, optionally protected by a passphrase.
+ *
+ * @param groupThreshold The number of groups required to reconstruct the master secret.
+ * @param groups A list of (member_threshold, member_count) pairs for each group, where member_count
+ *   is the number of shares to generate for the group and member_threshold is the number of members required to
+ *   reconstruct the group secret.
+ * @param masterSecret The master secret to split.
+ * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer,
+ *   printable ASCII only).
+ * @param extendable Whether the shares can later be extended with new shares for the same
+ *   secret (default true).
+ * @param iterationExponent The encryption iteration exponent, an integer from 0 to 15 (default 1).
+ *   Each step doubles the passphrase derivation cost.
+ * @return List of groups of mnemonics.
+ */
 export function generateMnemonics(
   groupThreshold: number,
   groups: Array<[number, number]>,
@@ -583,28 +605,6 @@ export function generateMnemonics(
   extendable: boolean = true,
   iterationExponent: number = 1
 ): string[][] {
-  /**
-   * Split a master secret into mnemonic shares using Shamir's secret sharing scheme.
-   *
-   * The supplied Master Secret is encrypted by the passphrase (empty passphrase is used
-   * if none is provided) and split into a set of mnemonic shares.
-   *
-   * This is the user-friendly method to back up a pre-existing secret with the Shamir
-   * scheme, optionally protected by a passphrase.
-   *
-   * @param groupThreshold The number of groups required to reconstruct the master secret.
-   * @param groups A list of (member_threshold, member_count) pairs for each group, where member_count
-   *   is the number of shares to generate for the group and member_threshold is the number of members required to
-   *   reconstruct the group secret.
-   * @param masterSecret The master secret to split.
-   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer,
-   *   printable ASCII only).
-   * @param extendable Whether the shares can later be extended with new shares for the same
-   *   secret (default true).
-   * @param iterationExponent The encryption iteration exponent, an integer from 0 to 15 (default 1).
-   *   Each step doubles the passphrase derivation cost.
-   * @return List of groups of mnemonics.
-   */
   if (!Buffer.isBuffer(masterSecret)) {
     throw new ShamirError('The master secret must be a Buffer.', 'INVALID_MASTER_SECRET');
   }
@@ -635,18 +635,18 @@ export function generateMnemonics(
   return groupedShares.map(group => group.map(share => share.mnemonic()));
 }
 
+/**
+ * Combine shares, recover metadata and the Encrypted Master Secret.
+ *
+ * This function is a counterpart to `splitEms`, and it is used as a subroutine in
+ * `combineMnemonics`. It returns the EMS itself and data required for its decryption,
+ * except for the passphrase. It is thus possible to defer decryption of the Master
+ * Secret to a later time.
+ *
+ * @param groups Set of shares classified into groups.
+ * @return Encrypted Master Secret
+ */
 export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecret {
-  /**
-   * Combine shares, recover metadata and the Encrypted Master Secret.
-   *
-   * This function is a counterpart to `splitEms`, and it is used as a subroutine in
-   * `combineMnemonics`. It returns the EMS itself and data required for its decryption,
-   * except for the passphrase. It is thus possible to defer decryption of the Master
-   * Secret to a later time.
-   *
-   * @param groups Set of shares classified into groups.
-   * @return Encrypted Master Secret
-   */
   if (groups.size === 0 || Array.from(groups.values()).some(group => group.isEmpty)) {
     throw new MnemonicError('The set of shares is empty.', 'EMPTY_SHARES');
   }
@@ -701,23 +701,23 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
   );
 }
 
+/**
+ * Combine mnemonic shares to obtain the master secret which was previously split
+ * using Shamir's secret sharing scheme.
+ *
+ * This is the user-friendly method to recover a backed-up secret optionally protected
+ * by a passphrase.
+ *
+ * @param mnemonics List of mnemonics.
+ * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
+ * @return The master secret.
+ * @security The returned buffer contains sensitive data. Callers MUST overwrite it
+ *           after use (for example `buffer.fill(0)`) to limit its exposure in memory.
+ */
 export function combineMnemonics(
   mnemonics: Iterable<string>,
   passphrase: Passphrase = Buffer.alloc(0)
 ): Buffer {
-  /**
-   * Combine mnemonic shares to obtain the master secret which was previously split
-   * using Shamir's secret sharing scheme.
-   *
-   * This is the user-friendly method to recover a backed-up secret optionally protected
-   * by a passphrase.
-   *
-   * @param mnemonics List of mnemonics.
-   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
-   * @return The master secret.
-   * @security The returned buffer contains sensitive data. Callers MUST overwrite it
-   *           after use (for example `buffer.fill(0)`) to limit its exposure in memory.
-   */
   // Materialize once: a generator would be exhausted by the emptiness check.
   const mnemonicList = mnemonics ? Array.from(mnemonics) : [];
   if (mnemonicList.length === 0) {
