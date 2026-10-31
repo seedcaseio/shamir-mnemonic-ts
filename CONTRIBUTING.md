@@ -13,7 +13,9 @@ If you find a bug, please open an issue on GitHub with:
 - Steps to reproduce the issue
 - Expected behavior vs actual behavior
 - Your environment (Node.js version, OS, etc.)
-- Any relevant error messages or logs
+- Any relevant error messages or logs (never real seed phrases, shares or passphrases)
+
+Security problems must not be reported in public issues: see [SECURITY.md](SECURITY.md).
 
 ### Proposing Features
 
@@ -61,15 +63,16 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 
 - `src/` - Source TypeScript files
   - `constants.ts` - SLIP-0039 constants
-  - `utils.ts` - Utility functions and error classes
+  - `utils.ts` - Utility functions, error classes and error codes
   - `wordlist.ts` - Wordlist management
   - `rs1024.ts` - RS1024 checksum implementation
   - `cipher.ts` - Feistel cipher for encryption/decryption
   - `share.ts` - Share encoding/decoding
   - `shamir.ts` - Core Shamir secret sharing algorithms
   - `recovery.ts` - Interactive recovery state management
-  - `index.ts` - Public API exports
-- `tests/` - Test files
+  - `index.ts` - Public API exports (`shamir-mnemonic-ts`)
+  - `decode.ts` - Decoding-only entry point, without Node `crypto` (`shamir-mnemonic-ts/decode`)
+- `tests/` - Test files (`*.test.ts` run on `src/`; `dist.smoke.ts` runs on the built `dist/`)
 - `dist/` - Compiled JavaScript output (generated)
 
 ## Code Standards
@@ -93,6 +96,13 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 - Add JSDoc comments for public functions
 - Explain complex algorithms or non-obvious code
 - Keep comments up-to-date with code changes
+- Update `README.md` and `CHANGELOG.md` when behavior or the public API changes
+
+### Errors
+
+- Throw `MnemonicError` for invalid user input (mnemonics) and `ShamirError` for invalid arguments or state, always with a code from `ShamirErrorCode`
+- Error codes are public API: add new ones, never rename or remove them outside a major version, and document them in the README error table
+- Messages and `details` must never contain share words, secret bytes or passphrases: `details` only holds metadata such as positions or counts
 
 ### Tests
 
@@ -119,12 +129,12 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 3. **Ensure tests pass**:
    ```bash
    npm test
-   npm run test:vectors
    ```
 
-4. **Build the project** to ensure it compiles:
+4. **Build the project and test the build**:
    ```bash
    npm run build
+   npm run test:dist
    ```
 
 5. **Commit your changes**:
@@ -146,7 +156,7 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 
 - Keep PRs focused and reasonably sized
 - One feature or fix per PR
-- Ensure all CI checks pass
+- Ensure `npm test` and `npm run test:dist` pass
 - Be responsive to review feedback
 - Update your PR if requested
 
@@ -163,6 +173,9 @@ npm run test:watch
 
 # Run test vectors
 npm run test:vectors
+
+# Run the smoke tests on the built package (after npm run build)
+npm run test:dist
 ```
 
 ### Writing Tests
@@ -196,7 +209,8 @@ This project handles cryptographic operations. Please:
 - Be extra careful with security-related changes
 - Review cryptographic code thoroughly
 - Consider security implications of any changes
-- Report security issues privately if needed
+- Report security issues privately, as described in [SECURITY.md](SECURITY.md)
+- Never use real seed phrases, shares or passphrases in tests, issues or logs
 
 ## Getting Help
 

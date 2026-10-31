@@ -8,13 +8,14 @@ This is a complete conversion of the Python [python-shamir-mnemonic](https://git
 
 ## Features
 
-- **SLIP-0039 compliant** — Binary-compatible with the standard mnemonic format
-- **Group sharing** — Split a secret across multiple groups (e.g. 2-of-3 groups, each with its own member threshold)
-- **Passphrase protection** — Optional encryption of the master secret (printable ASCII only)
+- **SLIP-0039 compliant**: binary-compatible with the standard mnemonic format
+- **Group sharing**: split a secret across multiple groups (e.g. 2-of-3 groups, each with its own member threshold)
+- **Passphrase protection**: optional encryption of the master secret (printable ASCII only)
 - **Extendable backups**: shares created with the `extendable` flag (default) can later be extended with new shares for the same secret
 - **Iteration exponent**: strengthens passphrase derivation (integer from 0 to 15, default 1)
-- **Low-level API** — `splitEms` / `recoverEms` for working with encrypted master secrets, plus `encrypt` / `decrypt` and `decodeMnemonics`
-- **Interactive recovery** — `RecoveryState` for step-by-step mnemonic entry and progress tracking
+- **Low-level API**: `splitEms` / `recoverEms` for working with encrypted master secrets, plus `encrypt` / `decrypt` and `decodeMnemonics`
+- **Interactive recovery**: `RecoveryState` for step-by-step mnemonic entry and progress tracking
+- **Stable error codes**: every error carries a `code` and metadata-only `details`, so apps can show their own messages
 
 ## Requirements
 
@@ -36,8 +37,8 @@ npm install shamir-mnemonic-ts
 
 The master secret must have an **even length in bytes** (e.g. 16, 20, 24, 28, or 32). This is required because passphrase encryption uses a **Feistel cipher** that splits the secret into two equal halves (L and R); an odd length cannot be divided evenly.
 
-- **Hex**: Use a hex string with an **even number of characters** (2 hex digits = 1 byte). Example: `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 chars = 16 bytes).
-- **BIP39**: BIP39 seed (128–256 bits) always has an even byte length (16, 20, 24, 28, 32), so it is suitable as a master secret.
+- **Length**: at least 16 bytes (128 bits). In practice the master secret is a BIP32 master seed of 16 to 32 bytes, as in hardware wallets that support SLIP-0039.
+- **Hex**: use a hex string with an **even number of characters** (2 hex digits = 1 byte). Example: `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 chars = 16 bytes).
 
 ### Basic: split and recover
 
@@ -78,6 +79,8 @@ const recovered = shamir.combineMnemonics(
 
 You can also pass a UTF-8-encoded `Buffer` instead of a string; the passphrase must contain only printable ASCII characters (code points 32–126).
 
+As specified by SLIP-0039, a wrong passphrase does **not** raise an error: recovery silently returns a different secret. Check the recovered secret (for example against a known address) before relying on it.
+
 ### Group sharing (e.g. 2-of-3 groups)
 
 ```typescript
@@ -106,22 +109,21 @@ import * as shamir from 'shamir-mnemonic-ts';
 
 const state = new shamir.RecoveryState();
 
-// Add mnemonics one by one (e.g. from user input)
-function addMnemonic(mnemonic: string) {
-  const groups = shamir.decodeMnemonics([mnemonic]);
-  for (const group of groups.values()) {
-    for (const share of group) state.addShare(share);
-  }
-}
-addMnemonic('academic academic academic ...');  // first share
-addMnemonic('academic academic academic ...');  // second share
-// ...
+// Add mnemonics one by one (e.g. from user input). Entering the same share twice
+// is harmless; a share from another backup throws (NOT_IN_CURRENT_SET or CONFLICTING_SHARE).
+state.addShare(shamir.Share.fromMnemonic(firstMnemonic));
+state.addShare(shamir.Share.fromMnemonic(secondMnemonic));
 
 state.groupStatus(0);   // [entered, threshold] for group 0
 state.groupPrefix(0);   // first words of group 0
 state.isComplete();     // true when enough shares to recover
 
 const recovered = state.recover('my passphrase');
+try {
+  // use recovered
+} finally {
+  recovered.fill(0);
+}
 ```
 
 ### Secure cleanup
@@ -151,7 +153,7 @@ import { Share, MnemonicError } from 'shamir-mnemonic-ts/decode';
 const share = Share.fromMnemonic(mnemonic);
 ```
 
-Exposes `Share`, `ShareCommonParameters`, `ShareGroupParameters`, and `MnemonicError` only. Split, combine, encryption, and recovery stay on the main entry point (`import * as shamir from 'shamir-mnemonic-ts'`).
+Exposes `Share`, `MnemonicError`, `ShamirError` and the types `ShareCommonParameters`, `ShareGroupParameters`, `ShamirErrorCode` and `ShamirErrorDetails` only. Split, combine, encryption, and recovery stay on the main entry point (`import * as shamir from 'shamir-mnemonic-ts'`).
 
 ### Entry point: `shamir-mnemonic-ts/wordlist`
 
@@ -186,7 +188,51 @@ try {
 }
 ```
 
-`details` only holds metadata (positions, counts, field names), never share words or secret bytes. The full list of codes is the `ShamirErrorCode` type.
+`details` only holds metadata (positions, counts, field names), never share words or secret bytes. Codes are part of the public API: they only change in a major version.
+
+Invalid mnemonics or sets of mnemonics (`MnemonicError`):
+
+| Code | When | `details` |
+|---|---|---|
+| `INVALID_WORD` | A word is not in the SLIP-0039 wordlist | `position` (1-based; absent if the input is not a string) |
+| `MNEMONIC_TOO_SHORT` | Fewer words than a share can have | `minWords` |
+| `INVALID_MNEMONIC_LENGTH` | The word count does not match a valid share length | |
+| `INVALID_CHECKSUM` | The checksum fails: typo, missing or swapped words | |
+| `INVALID_PADDING` | Invalid padding bits in the share value | |
+| `GROUP_THRESHOLD_EXCEEDS_GROUP_COUNT` | The share metadata is inconsistent | |
+| `PARAMETERS_MISMATCH` | Shares of the same group disagree on a parameter | `field` |
+| `MIXED_MNEMONIC_SETS` | Shares from different backups, or with different group settings | `wordCount` |
+| `CONFLICTING_SHARE` | A share has the same index as another one but a different value | `index` |
+| `DUPLICATE_SHARE_INDEX` | Two shares with the same index reach recovery | |
+| `SHARE_LENGTH_MISMATCH` | Shares have different lengths | |
+| `INVALID_DIGEST` | The recovered secret fails its integrity check: corrupted or mismatched shares | |
+| `EMPTY_MNEMONICS` | No mnemonic was given | |
+| `EMPTY_SHARES` | No share, or an empty group, was given | |
+| `INSUFFICIENT_GROUPS` | Fewer groups than the group threshold | `required` |
+| `WRONG_GROUP_COUNT` | More groups than the group threshold | `expected`, `provided` |
+| `WRONG_MEMBER_COUNT` | A group does not have exactly its member threshold of shares | `expected`, `provided` |
+| `NOT_IN_CURRENT_SET` | `RecoveryState`: the share belongs to another backup | |
+| `INVALID_MNEMONIC` | Default code of a `MnemonicError` built without one | |
+
+Invalid arguments or state (`ShamirError`):
+
+| Code | When | `details` |
+|---|---|---|
+| `INVALID_THRESHOLD` | A threshold is not a positive integer | |
+| `THRESHOLD_EXCEEDS_SHARE_COUNT` | A threshold is greater than the number of shares | |
+| `INVALID_SHARE_COUNT` | A share count is not an integer | |
+| `TOO_MANY_SHARES` | More than 16 shares or groups | `max` |
+| `GROUP_THRESHOLD_EXCEEDS_GROUPS` | The group threshold is greater than the number of groups | |
+| `MEMBER_THRESHOLD_ONE_NOT_ALLOWED` | Member threshold 1 with several shares (use 1-of-1) | |
+| `MASTER_SECRET_TOO_SHORT` | The master secret is shorter than 16 bytes | `minBytes` |
+| `MASTER_SECRET_ODD_LENGTH` | The master secret (or encrypted master secret) has an odd length | |
+| `INVALID_MASTER_SECRET` | The master secret is not a `Buffer` | |
+| `INVALID_ITERATION_EXPONENT` | The iteration exponent is not an integer from 0 to 15 | `max` |
+| `INVALID_IDENTIFIER` | The identifier is not an integer from 0 to 32767 | `max` |
+| `PASSPHRASE_NOT_PRINTABLE_ASCII` | At generation, the passphrase has characters outside printable ASCII | |
+| `PASSPHRASE_NOT_UTF8` | A `Buffer` passphrase is not valid UTF-8 | |
+| `INVALID_PASSPHRASE` | The passphrase is neither a string nor a `Buffer` | |
+| `RECOVERY_NOT_STARTED` | `RecoveryState.groupPrefix` was called before any share was added | |
 
 ## Security
 
@@ -211,10 +257,14 @@ Never send these objects over IPC or to another process: pass mnemonic strings a
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)

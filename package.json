@@ -30,7 +30,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=18.0.0"
@@ -50,7 +51,10 @@
     "secret-sharing",
     "mnemonic",
     "slip-0039",
-    "cryptography"
+    "cryptography",
+    "slip39",
+    "bip32",
+    "seed-phrase"
   ],
   "author": {
     "name": "Seedcase",
