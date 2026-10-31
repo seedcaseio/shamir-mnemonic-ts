@@ -11,5 +11,5 @@ export {
   RANDOM_BYTES,
 } from './shamir';
 export { Share, ShareCommonParameters, ShareGroupParameters } from './share';
-export { MnemonicError, Passphrase } from './utils';
+export { MnemonicError, Passphrase, ShamirError, ShamirErrorCode, ShamirErrorDetails } from './utils';
 export { RecoveryState, UNDETERMINED } from './recovery';

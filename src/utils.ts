@@ -1,9 +1,77 @@
-export class MnemonicError extends Error {
-  constructor(message?: string) {
+/**
+ * Stable error codes. Apps should switch on `code` (and read `details`) to show
+ * their own translated messages, never parse `message`, which may change.
+ */
+export type ShamirErrorCode =
+  // Invalid mnemonic or set of mnemonics (thrown as MnemonicError)
+  | 'INVALID_MNEMONIC'
+  | 'INVALID_WORD'
+  | 'MNEMONIC_TOO_SHORT'
+  | 'INVALID_MNEMONIC_LENGTH'
+  | 'INVALID_CHECKSUM'
+  | 'INVALID_PADDING'
+  | 'GROUP_THRESHOLD_EXCEEDS_GROUP_COUNT'
+  | 'PARAMETERS_MISMATCH'
+  | 'MIXED_MNEMONIC_SETS'
+  | 'DUPLICATE_SHARE_INDEX'
+  | 'CONFLICTING_SHARE'
+  | 'SHARE_LENGTH_MISMATCH'
+  | 'INVALID_DIGEST'
+  | 'EMPTY_MNEMONICS'
+  | 'EMPTY_SHARES'
+  | 'INSUFFICIENT_GROUPS'
+  | 'WRONG_GROUP_COUNT'
+  | 'WRONG_MEMBER_COUNT'
+  | 'NOT_IN_CURRENT_SET'
+  // Invalid arguments or state (thrown as ShamirError)
+  | 'INVALID_THRESHOLD'
+  | 'THRESHOLD_EXCEEDS_SHARE_COUNT'
+  | 'INVALID_SHARE_COUNT'
+  | 'TOO_MANY_SHARES'
+  | 'GROUP_THRESHOLD_EXCEEDS_GROUPS'
+  | 'MEMBER_THRESHOLD_ONE_NOT_ALLOWED'
+  | 'MASTER_SECRET_TOO_SHORT'
+  | 'MASTER_SECRET_ODD_LENGTH'
+  | 'INVALID_MASTER_SECRET'
+  | 'INVALID_ITERATION_EXPONENT'
+  | 'INVALID_IDENTIFIER'
+  | 'PASSPHRASE_NOT_PRINTABLE_ASCII'
+  | 'PASSPHRASE_NOT_UTF8'
+  | 'INVALID_PASSPHRASE'
+  | 'RECOVERY_NOT_STARTED';
+
+/** Extra error data. Only metadata (counts, positions, field names), never secret material. */
+export type ShamirErrorDetails = Readonly<Record<string, string | number>>;
+
+/** Base class of every error thrown on purpose by this library. */
+export class ShamirError extends Error {
+  readonly code: ShamirErrorCode;
+  readonly details: ShamirErrorDetails;
+
+  constructor(message: string, code: ShamirErrorCode, details: ShamirErrorDetails = {}) {
     super(message);
+    this.name = 'ShamirError';
+    this.code = code;
+    this.details = Object.freeze({ ...details });
+  }
+}
+
+/** An invalid mnemonic or set of mnemonics (user input). */
+export class MnemonicError extends ShamirError {
+  constructor(message = '', code: ShamirErrorCode = 'INVALID_MNEMONIC', details: ShamirErrorDetails = {}) {
+    super(message, code, details);
     this.name = 'MnemonicError';
   }
 }
+
+/**
+ * Key of Node's custom inspect hook (used by console.log and util.inspect).
+ * Defined with Symbol.for so no Node import is needed (keeps `./decode` usable outside Node).
+ */
+export const INSPECT_CUSTOM: unique symbol = Symbol.for('nodejs.util.inspect.custom');
+
+/** Placeholder shown instead of secret bytes in logs and JSON. */
+export const REDACTED = '[redacted]';
 
 function _roundBits(n: number, radixBits: number): number {
   /** Get the number of `radixBits`-sized digits required to store a `n`-bit value. */
@@ -96,11 +164,15 @@ export function normalizePassphrase(passphrase: Passphrase): Buffer {
   if (typeof passphrase === 'string') {
     return Buffer.from(passphrase, 'utf8');
   }
+  if (!Buffer.isBuffer(passphrase)) {
+    throw new ShamirError('The passphrase must be a string or a Buffer.', 'INVALID_PASSPHRASE');
+  }
   // Buffer: verify it is valid UTF-8 (round-trip check)
   const roundTrip = Buffer.from(passphrase.toString('utf8'), 'utf8');
   if (roundTrip.compare(passphrase) !== 0) {
-    throw new Error(
-      'The passphrase buffer must contain valid UTF-8 when provided as a Buffer.'
+    throw new ShamirError(
+      'The passphrase buffer must contain valid UTF-8 when provided as a Buffer.',
+      'PASSPHRASE_NOT_UTF8'
     );
   }
   return passphrase;

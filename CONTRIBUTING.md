@@ -30,7 +30,7 @@ Pull requests are the best way to contribute code changes. Please follow the pro
 
 ### Prerequisites
 
-- Node.js >= 14.0.0
+- Node.js >= 18.0.0
 - npm (comes with Node.js)
 
 ### Getting Started

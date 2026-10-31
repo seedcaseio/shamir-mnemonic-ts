@@ -11,7 +11,7 @@ import {
   SECRET_INDEX,
 } from './constants';
 import { Share, ShareCommonParameters, ShareGroupParameters } from './share';
-import { MnemonicError, bitsToBytes, constantTimeEquals, normalizePassphrase, Passphrase, secureBufferCopy, secureBufferFill } from './utils';
+import { INSPECT_CUSTOM, MnemonicError, REDACTED, ShamirError, bitsToBytes, constantTimeEquals, normalizePassphrase, Passphrase, secureBufferCopy, secureBufferFill } from './utils';
 
 export interface RawShare {
   x: number;
@@ -72,12 +72,29 @@ export class ShareGroup {
       for (const field of fields) {
         if (existingParams[field] !== newParams[field]) {
           throw new MnemonicError(
-            `Invalid set of mnemonics. The ${field} parameters don't match.`
+            `Invalid set of mnemonics. The ${field} parameters don't match.`,
+            'PARAMETERS_MISMATCH',
+            { field }
           );
         }
       }
     }
 
+    // Shares are compared by value: the same share entered twice must count once.
+    if (this.has(share)) {
+      return;
+    }
+    // Same index, different value: two backups are mixed. Keeping both would make the
+    // group look complete while recovery can never succeed.
+    for (const existing of this._shares) {
+      if (existing.index === share.index) {
+        throw new MnemonicError(
+          'Invalid set of shares. Another share with the same index but a different value was already added.',
+          'CONFLICTING_SHARE',
+          { index: share.index }
+        );
+      }
+    }
     this._shares.add(share);
   }
 
@@ -98,6 +115,15 @@ export class ShareGroup {
       existingParams.groupCount === newParams.groupCount &&
       existingParams.memberThreshold === newParams.memberThreshold
     );
+  }
+
+  /** JSON and console output never show share values. */
+  toJSON(): { shares: ReturnType<Share['toJSON']>[] } {
+    return { shares: Array.from(this._shares, share => share.toJSON()) };
+  }
+
+  [INSPECT_CUSTOM](): string {
+    return `ShareGroup ${JSON.stringify(this.toJSON())}`;
   }
 
   toRawShares(): RawShare[] {
@@ -148,6 +174,23 @@ export class EncryptedMasterSecret {
     this.extendable = extendable;
     this.iterationExponent = iterationExponent;
     this.ciphertext = ciphertext;
+  }
+
+  /**
+   * JSON and console output never show the ciphertext: with an empty passphrase,
+   * anyone can decrypt it back to the master secret.
+   */
+  toJSON(): { identifier: number; extendable: boolean; iterationExponent: number; ciphertext: string } {
+    return {
+      identifier: this.identifier,
+      extendable: this.extendable,
+      iterationExponent: this.iterationExponent,
+      ciphertext: REDACTED,
+    };
+  }
+
+  [INSPECT_CUSTOM](): string {
+    return `EncryptedMasterSecret ${JSON.stringify(this.toJSON())}`;
   }
 
   static fromMasterSecret(
@@ -229,13 +272,14 @@ function _interpolate(shares: RawShare[], x: number): Buffer {
   const xCoordinates = new Set(shares.map(share => share.x));
 
   if (xCoordinates.size !== shares.length) {
-    throw new MnemonicError('Invalid set of shares. Share indices must be unique.');
+    throw new MnemonicError('Invalid set of shares. Share indices must be unique.', 'DUPLICATE_SHARE_INDEX');
   }
 
   const shareValueLengths = new Set(shares.map(share => share.data.length));
   if (shareValueLengths.size !== 1) {
     throw new MnemonicError(
-      'Invalid set of shares. All share values must have the same length.'
+      'Invalid set of shares. All share values must have the same length.',
+      'SHARE_LENGTH_MISMATCH'
     );
   }
 
@@ -293,19 +337,27 @@ function _splitSecret(
   shareCount: number,
   sharedSecret: Buffer
 ): RawShare[] {
-  if (threshold < 1) {
-    throw new Error('The requested threshold must be a positive integer.');
+  if (!Number.isInteger(threshold) || threshold < 1) {
+    throw new ShamirError('The requested threshold must be a positive integer.', 'INVALID_THRESHOLD');
+  }
+
+  // Counts below 1 are caught by the threshold check below (previous behavior and message).
+  if (!Number.isInteger(shareCount)) {
+    throw new ShamirError('The requested number of shares must be a positive integer.', 'INVALID_SHARE_COUNT');
   }
 
   if (threshold > shareCount) {
-    throw new Error(
-      'The requested threshold must not exceed the number of shares.'
+    throw new ShamirError(
+      'The requested threshold must not exceed the number of shares.',
+      'THRESHOLD_EXCEEDS_SHARE_COUNT'
     );
   }
 
   if (shareCount > MAX_SHARE_COUNT) {
-    throw new Error(
-      `The requested number of shares must not exceed ${MAX_SHARE_COUNT}.`
+    throw new ShamirError(
+      `The requested number of shares must not exceed ${MAX_SHARE_COUNT}.`,
+      'TOO_MANY_SHARES',
+      { max: MAX_SHARE_COUNT }
     );
   }
 
@@ -366,7 +418,7 @@ function _recoverSecret(threshold: number, shares: RawShare[]): Buffer {
       secureBufferFill(digest);
       secureBufferFill(randomPart);
       secureBufferFill(digestShare);
-      throw new MnemonicError('Invalid digest of the shared secret.');
+      throw new MnemonicError('Invalid digest of the shared secret.', 'INVALID_DIGEST');
     }
 
     // Clean up temporary buffers before returning
@@ -411,7 +463,7 @@ export function decodeMnemonics(mnemonics: Iterable<string>): Map<number, ShareG
   }
 
   if (commonParams.length === 0) {
-    throw new MnemonicError('The list of mnemonics is empty.');
+    throw new MnemonicError('The list of mnemonics is empty.', 'EMPTY_MNEMONICS');
   }
 
   const firstParams = commonParams[0];
@@ -426,7 +478,9 @@ export function decodeMnemonics(mnemonics: Iterable<string>): Map<number, ShareG
       throw new MnemonicError(
         'Invalid set of mnemonics. ' +
         `All mnemonics must begin with the same ${ID_EXP_LENGTH_WORDS} words, ` +
-        'must have the same group threshold and the same group count.'
+        'must have the same group threshold and the same group count.',
+        'MIXED_MNEMONIC_SETS',
+        { wordCount: ID_EXP_LENGTH_WORDS }
       );
     }
   }
@@ -453,23 +507,30 @@ export function splitEms(
    * @param encryptedMasterSecret The encrypted master secret to split.
    * @return List of groups of mnemonics.
    */
+  cipher.assertIdentifier(encryptedMasterSecret.identifier);
+  cipher.assertIterationExponent(encryptedMasterSecret.iterationExponent);
+
   if (encryptedMasterSecret.ciphertext.length * 8 < MIN_STRENGTH_BITS) {
-    throw new Error(
+    throw new ShamirError(
       'The length of the master secret must be ' +
-      `at least ${bitsToBytes(MIN_STRENGTH_BITS)} bytes.`
+      `at least ${bitsToBytes(MIN_STRENGTH_BITS)} bytes.`,
+      'MASTER_SECRET_TOO_SHORT',
+      { minBytes: bitsToBytes(MIN_STRENGTH_BITS) }
     );
   }
 
   if (groupThreshold > groups.length) {
-    throw new Error(
-      'The requested group threshold must not exceed the number of groups.'
+    throw new ShamirError(
+      'The requested group threshold must not exceed the number of groups.',
+      'GROUP_THRESHOLD_EXCEEDS_GROUPS'
     );
   }
 
   if (groups.some(([memberThreshold, memberCount]) => memberThreshold === 1 && memberCount > 1)) {
-    throw new Error(
+    throw new ShamirError(
       'Creating multiple member shares with member threshold 1 is not allowed. ' +
-      'Use 1-of-1 member sharing instead.'
+      'Use 1-of-1 member sharing instead.',
+      'MEMBER_THRESHOLD_ONE_NOT_ALLOWED'
     );
   }
 
@@ -540,13 +601,20 @@ export function generateMnemonics(
    * @param iterationExponent The encryption iteration exponent.
    * @return List of groups mnemonics.
    */
+  if (!Buffer.isBuffer(masterSecret)) {
+    throw new ShamirError('The master secret must be a Buffer.', 'INVALID_MASTER_SECRET');
+  }
+  // Checked before encryption: a large exponent would also block on PBKDF2 for minutes.
+  cipher.assertIterationExponent(iterationExponent);
+
   const passphraseBuf = normalizePassphrase(passphrase);
   // Validate passphrase contains only printable ASCII characters (code points 32-126)
   for (let i = 0; i < passphraseBuf.length; i++) {
     const code = passphraseBuf[i];
     if (code < 32 || code > 126) {
-      throw new Error(
-        'The passphrase must contain only printable ASCII characters (code points 32-126).'
+      throw new ShamirError(
+        'The passphrase must contain only printable ASCII characters (code points 32-126).',
+        'PASSPHRASE_NOT_PRINTABLE_ASCII'
       );
     }
   }
@@ -575,8 +643,8 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
    * @param groups Set of shares classified into groups.
    * @return Encrypted Master Secret
    */
-  if (groups.size === 0) {
-    throw new MnemonicError('The set of shares is empty.');
+  if (groups.size === 0 || Array.from(groups.values()).some(group => group.isEmpty)) {
+    throw new MnemonicError('The set of shares is empty.', 'EMPTY_SHARES');
   }
 
   const firstGroup = Array.from(groups.values())[0];
@@ -585,7 +653,9 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
   if (groups.size < params.groupThreshold) {
     throw new MnemonicError(
       'Insufficient number of mnemonic groups. ' +
-      `The required number of groups is ${params.groupThreshold}.`
+      `The required number of groups is ${params.groupThreshold}.`,
+      'INSUFFICIENT_GROUPS',
+      { required: params.groupThreshold }
     );
   }
 
@@ -593,7 +663,9 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
     throw new MnemonicError(
       'Wrong number of mnemonic groups. ' +
       `Expected ${params.groupThreshold} groups, ` +
-      `but ${groups.size} were provided.`
+      `but ${groups.size} were provided.`,
+      'WRONG_GROUP_COUNT',
+      { expected: params.groupThreshold, provided: groups.size }
     );
   }
 
@@ -604,7 +676,9 @@ export function recoverEms(groups: Map<number, ShareGroup>): EncryptedMasterSecr
       throw new MnemonicError(
         'Wrong number of mnemonics. ' +
         `Expected ${group.memberThreshold()} mnemonics starting with "${prefix} ...", ` +
-        `but ${group.length} were provided.`
+        `but ${group.length} were provided.`,
+        'WRONG_MEMBER_COUNT',
+        { expected: group.memberThreshold(), provided: group.length }
       );
     }
   }
@@ -640,11 +714,13 @@ export function combineMnemonics(
    * @security The returned buffer contains sensitive data. Callers MUST clean it up
    *           using secureBufferFill() after use to prevent memory leaks.
    */
-  if (!mnemonics || Array.from(mnemonics).length === 0) {
-    throw new MnemonicError('The list of mnemonics is empty.');
+  // Materialize once: a generator would be exhausted by the emptiness check.
+  const mnemonicList = mnemonics ? Array.from(mnemonics) : [];
+  if (mnemonicList.length === 0) {
+    throw new MnemonicError('The list of mnemonics is empty.', 'EMPTY_MNEMONICS');
   }
 
-  const groups = decodeMnemonics(mnemonics);
+  const groups = decodeMnemonics(mnemonicList);
   const encryptedMasterSecret = recoverEms(groups);
   return encryptedMasterSecret.decrypt(passphrase);
 }

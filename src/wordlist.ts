@@ -3,8 +3,9 @@ import { MnemonicError } from './utils';
 
 export { RADIX_BITS };
 
-// Wordlist from SLIP-0039
-export const WORDLIST: readonly string[] = [
+// Wordlist from SLIP-0039. Frozen: an accidental in-place change (sort, reverse...)
+// would make newly generated shares unrecoverable.
+export const WORDLIST: readonly string[] = Object.freeze([
   'academic',
   'acid',
   'acne',
@@ -1029,7 +1030,7 @@ export const WORDLIST: readonly string[] = [
   'yield',
   'yoga',
   'zero'
-];
+]);
 
 // Validate wordlist length
 if (WORDLIST.length !== RADIX) {
@@ -1038,11 +1039,32 @@ if (WORDLIST.length !== RADIX) {
   );
 }
 
-// Create word index map for fast lookup
-const WORD_INDEX_MAP = new Map<string, number>();
-WORDLIST.forEach((word, index) => {
-  WORD_INDEX_MAP.set(word, index);
-});
+/**
+ * A Map that refuses changes once built, to prevent accidental edits of the shared index.
+ * Not a security boundary: code running in the same process can still bypass it.
+ */
+class ReadonlyWordIndex extends Map<string, number> {
+  constructor(words: readonly string[]) {
+    super();
+    words.forEach((word, index) => Map.prototype.set.call(this, word, index));
+    Object.freeze(this);
+  }
+
+  set(): this {
+    throw new TypeError('WORD_INDEX is read-only.');
+  }
+
+  delete(): boolean {
+    throw new TypeError('WORD_INDEX is read-only.');
+  }
+
+  clear(): void {
+    throw new TypeError('WORD_INDEX is read-only.');
+  }
+}
+
+// Word index map for fast lookup
+const WORD_INDEX_MAP: ReadonlyMap<string, number> = new ReadonlyWordIndex(WORDLIST);
 
 /** Lowercase word → index. Same map used by `mnemonicToIndices`. */
 export const WORD_INDEX: ReadonlyMap<string, number> = WORD_INDEX_MAP;
@@ -1059,10 +1081,13 @@ export function mnemonicFromIndices(indices: Iterable<number>): string {
 
 export function mnemonicToIndices(mnemonic: string): number[] {
   try {
-    return mnemonic.split(/\s+/).map(word => {
+    return mnemonic.trim().split(/\s+/).map((word, position) => {
       const index = WORD_INDEX_MAP.get(word.toLowerCase());
       if (index === undefined) {
-        throw new MnemonicError(`Invalid mnemonic word ${word}.`);
+        // Never echo the word: a share pasted without spaces would end up whole in the message.
+        throw new MnemonicError(`Invalid mnemonic word at position ${position + 1}.`, 'INVALID_WORD', {
+          position: position + 1,
+        });
       }
       return index;
     });
@@ -1070,6 +1095,6 @@ export function mnemonicToIndices(mnemonic: string): number[] {
     if (error instanceof MnemonicError) {
       throw error;
     }
-    throw new MnemonicError(`Invalid mnemonic word.`);
+    throw new MnemonicError(`Invalid mnemonic word.`, 'INVALID_WORD');
   }
 }

@@ -1,7 +1,7 @@
 import { GROUP_PREFIX_LENGTH_WORDS } from './constants';
 import { ShareGroup, recoverEms } from './shamir';
 import { Share, ShareCommonParameters } from './share';
-import { MnemonicError, Passphrase } from './utils';
+import { INSPECT_CUSTOM, MnemonicError, Passphrase, ShamirError } from './utils';
 
 export const UNDETERMINED = -1;
 
@@ -14,7 +14,7 @@ export class RecoveryState {
   groupPrefix(groupIndex: number): string {
     /** Return three starting words of a given group. */
     if (!this.lastShare) {
-      throw new Error('Add at least one share first');
+      throw new ShamirError('Add at least one share first', 'RECOVERY_NOT_STARTED');
     }
 
     // Create a fake share with the requested group index
@@ -99,7 +99,8 @@ export class RecoveryState {
     /** Add a share to the recovery set. */
     if (!this.matches(share)) {
       throw new MnemonicError(
-        'This mnemonic is not part of the current set. Please try again.'
+        'This mnemonic is not part of the current set. Please try again.',
+        'NOT_IN_CURRENT_SET'
       );
     }
 
@@ -128,6 +129,18 @@ export class RecoveryState {
 
     const group = this.groups.get(obj.groupIndex);
     return group ? group.has(obj) : false;
+  }
+
+  /** JSON and console output show progress only, never share values. */
+  toJSON(): { parameters: ShareCommonParameters | null; groups: { groupIndex: number; shareCount: number }[] } {
+    return {
+      parameters: this.parameters,
+      groups: Array.from(this.groups, ([groupIndex, group]) => ({ groupIndex, shareCount: group.length })),
+    };
+  }
+
+  [INSPECT_CUSTOM](): string {
+    return `RecoveryState ${JSON.stringify(this.toJSON())}`;
   }
 
   /**

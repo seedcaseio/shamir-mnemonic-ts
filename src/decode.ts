@@ -1,2 +1,2 @@
 export { Share, ShareCommonParameters, ShareGroupParameters } from './share';
-export { MnemonicError } from './utils';
+export { MnemonicError, ShamirError, ShamirErrorCode, ShamirErrorDetails } from './utils';

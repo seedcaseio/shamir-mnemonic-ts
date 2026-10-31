@@ -3,9 +3,37 @@ import {
   BASE_ITERATION_COUNT,
   CUSTOMIZATION_STRING_ORIG,
   ID_LENGTH_BITS,
+  ITERATION_EXP_LENGTH_BITS,
   ROUND_COUNT,
 } from './constants';
-import { bitsToBytes, secureBufferCopy, secureBufferFill } from './utils';
+import { ShamirError, bitsToBytes, secureBufferCopy, secureBufferFill } from './utils';
+
+/**
+ * Both values are packed into fixed-width bit fields of the share: out of range,
+ * they would silently corrupt neighbouring fields and give unrecoverable shares.
+ * A large exponent would also block PBKDF2 for minutes (or overflow the iteration count).
+ */
+export function assertIterationExponent(iterationExponent: number): void {
+  const max = (1 << ITERATION_EXP_LENGTH_BITS) - 1;
+  if (!Number.isInteger(iterationExponent) || iterationExponent < 0 || iterationExponent > max) {
+    throw new ShamirError(
+      `The iteration exponent must be an integer between 0 and ${max}.`,
+      'INVALID_ITERATION_EXPONENT',
+      { max }
+    );
+  }
+}
+
+export function assertIdentifier(identifier: number): void {
+  const max = (1 << ID_LENGTH_BITS) - 1;
+  if (!Number.isInteger(identifier) || identifier < 0 || identifier > max) {
+    throw new ShamirError(
+      `The identifier must be an integer between 0 and ${max}.`,
+      'INVALID_IDENTIFIER',
+      { max }
+    );
+  }
+}
 
 function _xor(a: Buffer, b: Buffer): Buffer {
   const result = Buffer.alloc(a.length);
@@ -60,9 +88,12 @@ export function encrypt(
   identifier: number,
   extendable: boolean
 ): Buffer {
+  assertIterationExponent(iterationExponent);
+  assertIdentifier(identifier);
   if (masterSecret.length % 2 !== 0) {
-    throw new Error(
-      'The length of the master secret in bytes must be an even number.'
+    throw new ShamirError(
+      'The length of the master secret in bytes must be an even number.',
+      'MASTER_SECRET_ODD_LENGTH'
     );
   }
 
@@ -75,8 +106,9 @@ export function encrypt(
     const temp = l;
     l = r;
     r = _xor(temp, f);
-    // Clean up buffer f containing sensitive data derived from passphrase
+    // Clean up f (derived from the passphrase) and temp (in round 0, half of the plaintext secret)
     secureBufferFill(f);
+    secureBufferFill(temp);
   }
 
   const result = Buffer.concat([r, l]);
@@ -95,9 +127,12 @@ export function decrypt(
   identifier: number,
   extendable: boolean
 ): Buffer {
+  assertIterationExponent(iterationExponent);
+  assertIdentifier(identifier);
   if (encryptedMasterSecret.length % 2 !== 0) {
-    throw new Error(
-      'The length of the encrypted master secret in bytes must be an even number.'
+    throw new ShamirError(
+      'The length of the encrypted master secret in bytes must be an even number.',
+      'MASTER_SECRET_ODD_LENGTH'
     );
   }
 
@@ -110,8 +145,9 @@ export function decrypt(
     const temp = l;
     l = r;
     r = _xor(temp, f);
-    // Clean up buffer f containing sensitive data derived from passphrase
+    // Clean up f (derived from the passphrase) and temp (intermediate cipher state)
     secureBufferFill(f);
+    secureBufferFill(temp);
   }
 
   const result = Buffer.concat([r, l]);

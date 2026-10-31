@@ -11,13 +11,14 @@ This is a complete conversion of the Python [python-shamir-mnemonic](https://git
 - **SLIP-0039 compliant** — Binary-compatible with the standard mnemonic format
 - **Group sharing** — Split a secret across multiple groups (e.g. 2-of-3 groups, each with its own member threshold)
 - **Passphrase protection** — Optional encryption of the master secret (printable ASCII only)
-- **Extendable backups** — Support for iteration exponent to strengthen passphrase derivation
+- **Extendable backups**: shares created with the `extendable` flag (default) can later be extended with new shares for the same secret
+- **Iteration exponent**: strengthens passphrase derivation (integer from 0 to 15, default 1)
 - **Low-level API** — `splitEms` / `recoverEms` for working with encrypted master secrets, plus `encrypt` / `decrypt` and `decodeMnemonics`
 - **Interactive recovery** — `RecoveryState` for step-by-step mnemonic entry and progress tracking
 
 ## Requirements
 
-- **Node.js** >= 14.0.0
+- **Node.js** >= 18.0.0
 
 ## Specification
 
@@ -142,7 +143,7 @@ try {
 
 ### Entry point: `shamir-mnemonic-ts/decode`
 
-For React Native / Expo and other environments without Node `crypto`, use `./decode` to parse share mnemonics without loading `cipher` or `shamir`:
+For React Native / Expo, browsers and other environments without Node `crypto`, use `./decode` to parse share mnemonics without loading `cipher` or `shamir`. It still needs a global `Buffer` (for example the [`buffer`](https://www.npmjs.com/package/buffer) package, assigned to `globalThis.Buffer` before the first import):
 
 ```typescript
 import { Share, MnemonicError } from 'shamir-mnemonic-ts/decode';
@@ -167,7 +168,25 @@ import {
 } from 'shamir-mnemonic-ts/wordlist';
 ```
 
-`WORDLIST` is the official 1024-word list; each word is one `RADIX_BITS`-bit symbol. `WORD_INDEX` maps lowercase words to indices. Use this entry as the single source of truth when packing or validating share mnemonics outside the main API.
+`WORDLIST` is the official 1024-word list; each word is one `RADIX_BITS`-bit symbol. `WORD_INDEX` maps lowercase words to indices. Use this entry as the single source of truth when packing or validating share mnemonics outside the main API. Both are read-only: `WORDLIST` is frozen and `WORD_INDEX` throws on `set`, `delete` and `clear`. Like `./decode`, this entry needs a global `Buffer` outside Node.
+
+## Errors
+
+Every error thrown on purpose is a `ShamirError` with a stable `code` and a `details` object. Invalid mnemonics or sets of mnemonics throw `MnemonicError`, a subclass of `ShamirError`. Show your own (translated) messages from `code` and `details`; do not parse `message`, its wording may change.
+
+```typescript
+import * as shamir from 'shamir-mnemonic-ts';
+
+try {
+  shamir.combineMnemonics(mnemonics);
+} catch (error) {
+  if (error instanceof shamir.ShamirError && error.code === 'INVALID_WORD') {
+    showError(t('invalidWord', { position: error.details.position }));
+  }
+}
+```
+
+`details` only holds metadata (positions, counts, field names), never share words or secret bytes. The full list of codes is the `ShamirErrorCode` type.
 
 ## Security
 
@@ -180,6 +199,15 @@ The following APIs return a `Buffer` containing the master secret:
 - `RecoveryState.recover`
 
 **Callers must overwrite this buffer after use** (e.g. `buffer.fill(0)`) to limit exposure in memory. Do this in a `try/finally` block so cleanup runs even when an error is thrown. The usage examples in the [Usage](#usage) section are simplified; production code should apply this cleanup. See the [Secure cleanup](#secure-cleanup) example.
+
+Error messages never include the secret part of a share. An unknown word is reported by its position (`Invalid mnemonic word at position 5.`), never echoed. Checksum, padding and grouping errors quote the first 3 or 4 words of a mnemonic: these words only encode metadata (identifier, thresholds, indices), not the secret, but they do tell which backup a share belongs to.
+
+`Share`, `ShareGroup`, `EncryptedMasterSecret` and `RecoveryState` hide their secret bytes when passed to `JSON.stringify`, or to `console.log` and `util.inspect` in Node: only metadata is shown, and secret fields read `[redacted]`. This is a safety net against accidental logging, not a protection:
+
+- reading a field directly (for example `share.value`) still gives the real data;
+- `structuredClone`, Electron IPC and `postMessage`, object spread (`{ ...share }`), `Object.assign` and browser DevTools copy or show the real bytes.
+
+Never send these objects over IPC or to another process: pass mnemonic strings and wipe them as soon as possible.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 

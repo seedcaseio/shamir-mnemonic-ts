@@ -11,7 +11,7 @@ import {
   RADIX,
   RADIX_BITS,
 } from './constants';
-import { MnemonicError, bitsToBytes, bitsToWords, intToIndices } from './utils';
+import { INSPECT_CUSTOM, MnemonicError, REDACTED, bitsToBytes, bitsToWords, intToIndices } from './utils';
 
 export type WordIndex = number;
 
@@ -160,6 +160,15 @@ export class Share {
     return this.words().join(' ');
   }
 
+  /** JSON and console output show the metadata only, never the share value. */
+  toJSON(): ShareGroupParameters & { index: number; value: string } {
+    return { ...this.groupParameters(), index: this.index, value: REDACTED };
+  }
+
+  [INSPECT_CUSTOM](): string {
+    return `Share ${JSON.stringify(this.toJSON())}`;
+  }
+
   static fromMnemonic(mnemonic: string): Share {
     /** Convert a share mnemonic to share data. */
     const mnemonicData = wordlist.mnemonicToIndices(mnemonic);
@@ -167,13 +176,15 @@ export class Share {
     if (mnemonicData.length < MIN_MNEMONIC_LENGTH_WORDS) {
       throw new MnemonicError(
         `Invalid mnemonic length. The length of each mnemonic ` +
-        `must be at least ${MIN_MNEMONIC_LENGTH_WORDS} words.`
+        `must be at least ${MIN_MNEMONIC_LENGTH_WORDS} words.`,
+        'MNEMONIC_TOO_SHORT',
+        { minWords: MIN_MNEMONIC_LENGTH_WORDS }
       );
     }
 
     const paddingLen = (RADIX_BITS * (mnemonicData.length - METADATA_LENGTH_WORDS)) % 16;
     if (paddingLen > 8) {
-      throw new MnemonicError('Invalid mnemonic length.');
+      throw new MnemonicError('Invalid mnemonic length.', 'INVALID_MNEMONIC_LENGTH');
     }
 
     const idExpData = mnemonicData.slice(0, ID_EXP_LENGTH_WORDS);
@@ -184,9 +195,10 @@ export class Share {
     const iterationExponent = idExpInt & ((1 << ITERATION_EXP_LENGTH_BITS) - 1);
 
     if (!rs1024.verifyChecksum(mnemonicData, _customizationString(extendable))) {
-      const prefix = mnemonic.split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
+      const prefix = mnemonic.trim().split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
       throw new MnemonicError(
-        `Invalid mnemonic checksum for "${prefix} ...".`
+        `Invalid mnemonic checksum for "${prefix} ...".`,
+        'INVALID_CHECKSUM'
       );
     }
 
@@ -202,9 +214,10 @@ export class Share {
     ] = shareParams;
 
     if (groupCount < groupThreshold) {
-      const prefix = mnemonic.split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
+      const prefix = mnemonic.trim().split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
       throw new MnemonicError(
-        `Invalid mnemonic "${prefix} ...". Group threshold cannot be greater than group count.`
+        `Invalid mnemonic "${prefix} ...". Group threshold cannot be greater than group count.`,
+        'GROUP_THRESHOLD_EXCEEDS_GROUP_COUNT'
       );
     }
 
@@ -231,18 +244,20 @@ export class Share {
       }
 
       if (tempValue !== 0n) {
-        const prefix = mnemonic.split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
+        const prefix = mnemonic.trim().split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
         throw new MnemonicError(
-          `Invalid mnemonic padding for "${prefix} ...".`
+          `Invalid mnemonic padding for "${prefix} ...".`,
+          'INVALID_PADDING'
         );
       }
     } catch (error) {
       if (error instanceof MnemonicError) {
         throw error;
       }
-      const prefix = mnemonic.split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
+      const prefix = mnemonic.trim().split(/\s+/).slice(0, ID_EXP_LENGTH_WORDS + 2).join(' ');
       throw new MnemonicError(
-        `Invalid mnemonic padding for "${prefix} ...".`
+        `Invalid mnemonic padding for "${prefix} ...".`,
+        'INVALID_PADDING'
       );
     }
 
