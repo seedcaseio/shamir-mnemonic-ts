@@ -219,8 +219,8 @@ export class EncryptedMasterSecret {
    * Decrypt the master secret using the passphrase.
    * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
-   * @security The returned buffer contains sensitive data. Callers MUST clean it up
-   *           using secureBufferFill() after use to prevent memory leaks.
+   * @security The returned buffer contains sensitive data. Callers MUST overwrite it
+   *           after use (for example `buffer.fill(0)`) to limit its exposure in memory.
    */
   decrypt(passphrase: Passphrase): Buffer {
     const passphraseBuf = normalizePassphrase(passphrase);
@@ -234,10 +234,10 @@ export class EncryptedMasterSecret {
   }
 }
 
-export let RANDOM_BYTES = (length: number): Buffer => {
+/** Source of random bytes for identifiers and shares: Node's cryptographically secure generator. */
+export const RANDOM_BYTES = (length: number): Buffer => {
   return crypto.randomBytes(length);
 };
-/** Source of random bytes. Can be overriden for deterministic testing. */
 
 function _precomputeExpLog(): [number[], number[]] {
   const exp: number[] = new Array(255).fill(0);
@@ -505,7 +505,7 @@ export function splitEms(
    *   is the number of shares to generate for the group and member_threshold is the number of members required to
    *   reconstruct the group secret.
    * @param encryptedMasterSecret The encrypted master secret to split.
-   * @return List of groups of mnemonics.
+   * @return List of groups of shares (`Share` objects; call `mnemonic()` to get the words).
    */
   cipher.assertIdentifier(encryptedMasterSecret.identifier);
   cipher.assertIterationExponent(encryptedMasterSecret.iterationExponent);
@@ -597,9 +597,13 @@ export function generateMnemonics(
    *   is the number of shares to generate for the group and member_threshold is the number of members required to
    *   reconstruct the group secret.
    * @param masterSecret The master secret to split.
-   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
-   * @param iterationExponent The encryption iteration exponent.
-   * @return List of groups mnemonics.
+   * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer,
+   *   printable ASCII only).
+   * @param extendable Whether the shares can later be extended with new shares for the same
+   *   secret (default true).
+   * @param iterationExponent The encryption iteration exponent, an integer from 0 to 15 (default 1).
+   *   Each step doubles the passphrase derivation cost.
+   * @return List of groups of mnemonics.
    */
   if (!Buffer.isBuffer(masterSecret)) {
     throw new ShamirError('The master secret must be a Buffer.', 'INVALID_MASTER_SECRET');
@@ -711,8 +715,8 @@ export function combineMnemonics(
    * @param mnemonics List of mnemonics.
    * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
-   * @security The returned buffer contains sensitive data. Callers MUST clean it up
-   *           using secureBufferFill() after use to prevent memory leaks.
+   * @security The returned buffer contains sensitive data. Callers MUST overwrite it
+   *           after use (for example `buffer.fill(0)`) to limit its exposure in memory.
    */
   // Materialize once: a generator would be exhausted by the emptiness check.
   const mnemonicList = mnemonics ? Array.from(mnemonics) : [];

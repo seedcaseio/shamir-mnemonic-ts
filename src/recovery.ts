@@ -147,8 +147,8 @@ export class RecoveryState {
    * Recover the master secret, given a passphrase.
    * @param passphrase The passphrase used to encrypt the master secret (string or UTF-8 Buffer).
    * @return The master secret.
-   * @security The returned buffer contains sensitive data. Callers MUST clean it up
-   *           using secureBufferFill() after use to prevent memory leaks.
+   * @security The returned buffer contains sensitive data. Callers MUST overwrite it
+   *           after use (for example `buffer.fill(0)`) to limit its exposure in memory.
    */
   recover(passphrase: Passphrase): Buffer {
     // Select a subset of shares which meets the thresholds.
