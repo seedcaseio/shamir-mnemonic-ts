@@ -1,6 +1,6 @@
 # Shamir Mnemonic TypeScript
 
-TypeScript implementation of [SLIP-0039](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) Shamir Secret Sharing for mnemonic seed phrases.
+TypeScript implementation of [SLIP-0039](https://github.com/satoshilabs/slips/blob/master/slip-0039.md) Shamir Secret Sharing: split any secret of the right size (e.g. 16, 20, 24, 28, 32 or 64 bytes, i.e. 128 to 512 bits) into mnemonic shares, then recover it from a sufficient subset of them.
 
 This is a complete conversion of the Python [python-shamir-mnemonic](https://github.com/trezor/python-shamir-mnemonic/tree/master) reference implementation to TypeScript for Node.js.
 
@@ -35,10 +35,14 @@ npm install shamir-mnemonic-ts
 
 ### Master secret
 
-The master secret must have an **even length in bytes** (e.g. 16, 20, 24, 28, or 32). This is required because passphrase encryption uses a **Feistel cipher** that splits the secret into two equal halves (L and R); an odd length cannot be divided evenly.
+The master secret can be any data, as long as it has the right size:
 
-- **Length**: at least 16 bytes (128 bits). In practice the master secret is a BIP32 master seed of 16 to 32 bytes, as in hardware wallets that support SLIP-0039.
-- **Hex**: use a hex string with an **even number of characters** (2 hex digits = 1 byte). Example: `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 chars = 16 bytes).
+- **At least 16 bytes** (128 bits).
+- **An even number of bytes** (e.g. 16, 20, 24, 28 or 32): passphrase encryption uses a **Feistel cipher** that splits the secret into two equal halves.
+
+For example, a BIP32 master seed (16 to 32 bytes) is the reference use case of SLIP-0039, as in Trezor hardware wallets.
+
+To pass the secret as hex, use an **even number of hex characters** (2 hex digits = 1 byte): `Buffer.from('b43ceb7e57a0ea8766221624d01b0864', 'hex')` (32 characters = 16 bytes).
 
 ### Basic: split and recover
 

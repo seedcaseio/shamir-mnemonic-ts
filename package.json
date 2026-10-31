@@ -1,7 +1,7 @@
 {
   "name": "shamir-mnemonic-ts",
   "version": "1.3.0",
-  "description": "TypeScript implementation of SLIP-0039 Shamir Secret Sharing for mnemonic seed phrases",
+  "description": "TypeScript implementation of SLIP-0039 Shamir Secret Sharing",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -53,8 +53,7 @@
     "slip-0039",
     "cryptography",
     "slip39",
-    "bip32",
-    "seed-phrase"
+    "bip32"
   ],
   "author": {
     "name": "Seedcase",
