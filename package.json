@@ -18,6 +18,16 @@
       "default": "./dist/wordlist.js"
     }
   },
+  "typesVersions": {
+    "*": {
+      "decode": [
+        "dist/decode.d.ts"
+      ],
+      "wordlist": [
+        "dist/wordlist.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "README.md"
