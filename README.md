@@ -273,3 +273,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [MIT](LICENSE)
+
+This library was ported from [python-shamir-mnemonic](https://github.com/trezor/python-shamir-mnemonic) by SatoshiLabs (MIT), then modified and extended. The test vectors in `tests/vectors.json` come from the same project.

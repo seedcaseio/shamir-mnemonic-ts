@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Added
+
+- `LICENSE` now includes the copyright notice of SatoshiLabs, author of the python-shamir-mnemonic reference implementation this library was ported from. The README credits it in the License section.
+
 ## 1.3.0 - 2026-10-31
 
 Share format, wordlist and SLIP-0039 compatibility are unchanged: shares created with earlier versions recover the same way.
